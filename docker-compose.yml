@@ -1,0 +1,68 @@
+services:
+  db:
+    image: ${IMAGE_REGISTRY:?set IMAGE_REGISTRY in .env}/amzer-db:${IMAGE_TAG:-latest}
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+    volumes:
+      - dbdata:/var/lib/postgresql/pgdata-baked
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  backup:
+    image: ${IMAGE_REGISTRY:?set IMAGE_REGISTRY in .env}/amzer-backup:${IMAGE_TAG:-latest}
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_EXTRA_OPTS: --no-owner --no-privileges
+      SCHEDULE: "0 2 * * *"
+      BACKUP_KEEP_DAYS: 5
+      BACKUP_KEEP_WEEKS: 0
+      BACKUP_KEEP_MONTHS: 0
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  api:
+    image: ${IMAGE_REGISTRY:?set IMAGE_REGISTRY in .env}/amzer-api:${IMAGE_TAG:-latest}
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    networks:
+      default:
+      amzer-net:
+        aliases: [amzer-api]
+
+  migrate:
+    image: ${IMAGE_REGISTRY:?set IMAGE_REGISTRY in .env}/amzer-api:${IMAGE_TAG:-latest}
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles: ["tools"]
+
+volumes:
+  dbdata:
+
+networks:
+  amzer-net:
+    external: true
