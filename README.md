@@ -38,15 +38,12 @@ Documentation interactive : `http://localhost:8000/docs` (désactivable avec `EN
 | `api` | Image `api` du registry (gunicorn + workers uvicorn), port 8000. `docker compose build api` la reconstruit depuis le code. |
 | `migrate` | Tâche ponctuelle `alembic upgrade head` (profil `tools`). |
 
-Les migrations ne sont **pas** lancées au démarrage de l'API : c'est une étape de déploiement explicite.
-
 ```bash
 make up              # docker compose up -d
 make down
-make migrate-docker  # backup, puis alembic upgrade head
+make migrate		 # évolution du schéma de base de donnée
 ```
 
-L'image `db` contient déjà le schéma : `migrate` ne sert qu'aux évolutions ultérieures.
 
 ## Images Docker (GitHub Container Registry)
 
